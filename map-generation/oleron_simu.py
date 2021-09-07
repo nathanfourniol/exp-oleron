@@ -95,11 +95,11 @@ if __name__ == "__main__":
     ax.ymin = 0
     ax.ymax = 80
 
-    state = np.array([[10], [60], [1*np.pi]])
+    state = np.array([[10], [30], [1*np.pi]])
     u = 0
 
     t = 0
-    t_simu = 100
+    t_simu = 50
     dt = 0.1
     while t < t_simu:
         plt.cla()
@@ -120,3 +120,4 @@ if __name__ == "__main__":
         state = state + dt * f(state, u)
         a = state[2, 0] % (2*np.pi)
         # print(f'x : {state[0,0]}, y : {state[1,0]}, theta : {a}')
+        t += dt
