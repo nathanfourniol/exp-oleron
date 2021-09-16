@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 
+import time
+import json
+import random as rd
+
+import roblib
+
+import matplotlib.pyplot as plt
 import numpy as np
 import numpy.polynomial.polynomial as P
-import json
-import matplotlib.pyplot as plt
-import time
 
 
 def contour_domain(contour):
@@ -79,6 +83,77 @@ def collision(state, contour, xdomain):
     return False
 
 
+def control_u(x, heading_d):
+    k = 2
+    theta_tilde = heading_d - x[2, 0]
+    u = k * roblib.sawtooth(theta_tilde)
+    return u
+
+
+def heading_to_follow(t_prime, list_heading, list_time, current_state, previous_state, hit):
+    print(f't_prime : {t_prime}, hit : {hit}, Temps: {list_time}, state : {current_state}')
+    if current_state == 0:
+        if hit:
+            previous_state = current_state
+            current_state = 3
+            heading_d = list_heading[3]
+            list_time[2] = t_prime
+            t_prime = 0
+        elif previous_state == 3 and t_prime > list_time[0]:
+            previous_state = current_state
+            current_state = 1
+            heading_d = list_heading[1]
+            t_prime = 0
+        else:
+            heading_d = list_heading[0]
+            
+    elif current_state == 1:
+        if hit:
+            previous_state = current_state
+            current_state = 2
+            heading_d = list_heading[2]
+            list_time[1] = t_prime + (rd.random()-0.5)*0.6*t_prime
+            t_prime = 0
+        elif previous_state == 2 and t_prime > list_time[3]:
+            previous_state = current_state
+            current_state = 3
+            heading_d = list_heading[3]
+            t_prime = 0
+        else:
+            heading_d = list_heading[1]
+
+    elif current_state == 2:
+        if hit:
+            previous_state = current_state
+            current_state = 1
+            heading_d = list_heading[1]
+            list_time[3] = t_prime + (rd.random()-0.5)*0.6*t_prime
+            t_prime = 0
+        elif previous_state == 1 and t_prime > list_time[1]:
+            previous_state = current_state
+            current_state = 0
+            heading_d = list_heading[0]
+            t_prime = 0
+        else:
+            heading_d = list_heading[2]
+
+    elif current_state == 3:
+        if hit:
+            previous_state = current_state
+            current_state = 0
+            heading_d = list_heading[0]
+            list_time[0] = t_prime + (rd.random()-0.5)*0.6*t_prime
+            t_prime = 0
+        elif previous_state == 0 and t_prime > list_time[2]:  # To do : remttre les temps à infini une fois la condition passée !
+            previous_state = current_state
+            current_state = 2
+            heading_d = list_heading[2]
+            t_prime = 0
+        else:
+            heading_d = list_heading[3]
+    return heading_d, current_state, t_prime, list_time, previous_state
+
+
 if __name__ == "__main__":
 
     # Recuperation des coefficients des polynomes de contours
@@ -95,29 +170,43 @@ if __name__ == "__main__":
     ax.ymin = 0
     ax.ymax = 80
 
-    state = np.array([[10], [30], [1*np.pi]])
+    state = np.array([[10], [30], [0]])
     u = 0
+    list_heading = [0, np.pi/2, -np.pi/2, np.pi]
+    list_time = [10, float('inf'), 10, float('inf')]
+    previous_state = 3
+    current_state = 0
 
     t = 0
-    t_simu = 50
+    t_simu = 500
+    t_prime = 0
+    t_hit = 2
     dt = 0.1
+    hit = False
     while t < t_simu:
         plt.cla()
-        u = 0
         for key in contour:
             for i in range(0, len(contour[key])):
                 x = find_domainX(i, xdomain[key])
                 ax.plot(x, P.polyval(x, contour[key][i]))
         ax.arrow(state[0][0], state[1][0], 2*np.cos(state[2][0]), 2*np.sin(state[2][0]))
         ax.plot(state[0], state[1], 'bo')
-        if collision(state, contour, xdomain):
+
+        hit = False
+        if collision(state, contour, xdomain) and t_hit > 2:  # minimum 1 sec entre 2 hits pour contrer les multiples hits
             print(" CROSS ")
-            state[2, 0] += 2*np.pi/3
+            hit = True
+            t_hit = 0  # compte le temps entre chaqeu hit
+            # state[2, 0] += 2*np.pi/3
             ax.plot(state[0], state[1], 'r+')
         plt.draw()
         plt.pause(0.001)
-        time.sleep(dt)
+        # time.sleep(dt)
+        h_d, current_state, t_prime, list_time, previous_state = heading_to_follow(t_prime, list_heading, list_time, current_state, previous_state, hit)
+        u = control_u(state, h_d)
         state = state + dt * f(state, u)
-        a = state[2, 0] % (2*np.pi)
+        print(f'STATE : {current_state}, HEADING : {h_d}')
         # print(f'x : {state[0,0]}, y : {state[1,0]}, theta : {a}')
         t += dt
+        t_hit += dt
+        t_prime += dt
